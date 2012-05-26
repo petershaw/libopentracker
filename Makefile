@@ -2,10 +2,6 @@
 
 CC?=gcc
 
-# libowfat is part of the git repository
-LIBOWFAT_HEADERS=vendor/libowfat
-LIBOWFAT_LIBRARY=vendor/libowfat
-
 # Linux flavour
 # PREFIX?=/opt/diet
 # LIBOWFAT_HEADERS=$(PREFIX)/include
@@ -18,6 +14,8 @@ LIBOWFAT_LIBRARY=vendor/libowfat
 
 # Debug flavour
 PREFIX?=..
+LIBOWFAT_HEADERS=$(PREFIX)/libowfat
+LIBOWFAT_LIBRARY=$(PREFIX)/libowfat
 
 BINDIR?=$(PREFIX)/bin
 
@@ -39,31 +37,34 @@ BINDIR?=$(PREFIX)/bin
 #FEATURES+=-DWANT_SYSLOGS
 FEATURES+=-DWANT_FULLSCRAPE
 
-#FEATURES+=-D_DEBUG_HTTPERROR
+FEATURES+=-D_DEBUG_HTTPERROR
+FEATURES+=-D_DEBUG
 
 OPTS_debug=-D_DEBUG -g -ggdb # -pg -fprofile-arcs -ftest-coverage
-OPTS_production=-O3
+OPTS_production=
 
 CFLAGS+=-I$(LIBOWFAT_HEADERS) -Wall -pipe -Wextra #-ansi -pedantic
 LDFLAGS+=-L$(LIBOWFAT_LIBRARY) -lowfat -pthread -lpthread -lz
 
 BINARY =opentracker
 HEADERS=trackerlogic.h scan_urlencoded_query.h ot_mutex.h ot_stats.h ot_vector.h ot_clean.h ot_udp.h ot_iovec.h ot_fullscrape.h ot_accesslist.h ot_http.h ot_livesync.h
-SOURCES=opentracker.c trackerlogic.c scan_urlencoded_query.c ot_mutex.c ot_stats.c ot_vector.c ot_clean.c ot_udp.c ot_iovec.c ot_fullscrape.c ot_accesslist.c ot_http.c ot_livesync.c
+SOURCES=opentracker.c libopentracker.c trackerlogic.c scan_urlencoded_query.c ot_mutex.c ot_stats.c ot_vector.c ot_clean.c ot_udp.c ot_iovec.c ot_fullscrape.c ot_accesslist.c ot_http.c ot_livesync.c
 SOURCES_proxy=proxy.c ot_vector.c ot_mutex.c
 
+LIBHEADERS=libopentracker.h trackerlogic.h scan_urlencoded_query.h ot_mutex.h ot_stats.h ot_vector.h ot_clean.h ot_udp.h ot_iovec.h ot_fullscrape.h ot_accesslist.h ot_http.h ot_livesync.h
+LIBSOURCES=libopentracker.c trackerlogic.c scan_urlencoded_query.c ot_mutex.c ot_stats.c ot_vector.c ot_clean.c ot_udp.c ot_iovec.c ot_fullscrape.c ot_accesslist.c ot_http.c ot_livesync.c
+LIBSOURCES_proxy=proxy.c ot_vector.c ot_mutex.c
+
+
 OBJECTS = $(SOURCES:%.c=%.o)
+LIBOBJECTS = $(LIBSOURCES:%.c=%.o)
 OBJECTS_debug = $(SOURCES:%.c=%.debug.o)
 OBJECTS_proxy = $(SOURCES_proxy:%.c=%.o)
 OBJECTS_proxy_debug = $(SOURCES_proxy:%.c=%.debug.o)
 
 .SUFFIXES: .debug.o .o .c
 
-all: vendor $(BINARY) $(BINARY).debug
-
-.PHONY: vendor
-vendor: vendor/
-	make -C vendor/libowfat
+all: $(BINARY) $(BINARY).debug
 
 CFLAGS_production = $(CFLAGS) $(OPTS_production) $(FEATURES)
 CFLAGS_debug = $(CFLAGS) $(OPTS_debug) $(FEATURES)
@@ -84,9 +85,18 @@ proxy.debug: $(OBJECTS_proxy_debug) $(HEADERS)
 .c.o : $(HEADERS)
 	$(CC) -c -o $@ $(CFLAGS_production) $<
 
+aslib: $(LIBOBJECTS) $(LIBHEADERS)
+	mkdir dist
+	cp libopentracker.h dist/libopentracker.h
+	ar rc dist/libopentracker.a $(LIBOBJECTS)
+	ranlib dist/libopentracker.a
+
+#aslib: $(OBJECTS) $(HEADERS)
+#	ar rc libopentracker.a $(OBJECTS)
+#	ranlib libopentracker.a
+
 clean:
-	rm -rf opentracker opentracker.debug *.o *~
-	make -C vendor/libowfat clean
+	rm -rf opentracker opentracker.debug libopentracker.a dist *.o *~
 
 install:
 	install -m 755 opentracker $(BINDIR)

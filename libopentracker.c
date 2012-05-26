@@ -2,7 +2,11 @@
    It is considered beerware. Prost. Skol. Cheers or whatever.
    Some of the stuff below is stolen from Fefes example libowfat httpd.
 
+    The libopentrackr is a quick hack by @peter_shaw
+ 
    $Id: opentracker.c,v 1.237 2012/04/25 05:48:16 erdgeist Exp $ */
+
+#include "libopentracker.h"
 
 /* System */
 #include <stdlib.h>
@@ -550,107 +554,58 @@ int drop_privileges ( const char * const serveruser, const char * const serverdi
   return 0;
 }
 
-int main( int argc, char **argv ) {
-  ot_ip6 serverip, tmpip;
-  int bound = 0, scanon = 1;
-  uint16_t tmpport;
-  char * statefile = 0;
+int startOpenTracker( ){
+     ot_ip6 serverip, tmpip;
+     int bound = 0, scanon = 1;
+     uint16_t tmpport;
+     char * statefile = 0;
+     
+     memset( serverip, 0, sizeof(ot_ip6) );
+     #ifndef WANT_V6
+     serverip[10]=serverip[11]=-1;
+     noipv6=1;
+     #endif
+     
+     // Bind to our default tcp/udp ports 
+     if( !bound) {
+     ot_try_bind( serverip, 6969, FLAG_TCP );
+     ot_try_bind( serverip, 6969, FLAG_UDP );
+     }
 
-  memset( serverip, 0, sizeof(ot_ip6) );
-#ifndef WANT_V6
-  serverip[10]=serverip[11]=-1;
-  noipv6=1;
-#endif
-
-  while( scanon ) {
-    switch( getopt( argc, argv, ":i:p:A:P:d:u:r:s:f:l:v"
-#ifdef WANT_ACCESSLIST_BLACK
-"b:"
-#elif defined( WANT_ACCESSLIST_WHITE )
-"w:"
-#endif
-    "h" ) ) {
-      case -1 : scanon = 0; break;
-      case 'i':
-        if( !scan_ip6( optarg, serverip )) { usage( argv[0] ); exit( 1 ); }
-        break;
-#ifdef WANT_ACCESSLIST_BLACK
-      case 'b': set_config_option( &g_accesslist_filename, optarg); break;
-#elif defined( WANT_ACCESSLIST_WHITE )
-      case 'w': set_config_option( &g_accesslist_filename, optarg); break;
-#endif
-      case 'p':
-        if( !scan_ushort( optarg, &tmpport)) { usage( argv[0] ); exit( 1 ); }
-        ot_try_bind( serverip, tmpport, FLAG_TCP ); bound++; break;
-      case 'P':
-        if( !scan_ushort( optarg, &tmpport)) { usage( argv[0] ); exit( 1 ); }
-        ot_try_bind( serverip, tmpport, FLAG_UDP ); bound++; break;
-#ifdef WANT_SYNC_LIVE
-      case 's':
-        if( !scan_ushort( optarg, &tmpport)) { usage( argv[0] ); exit( 1 ); }
-        livesync_bind_mcast( serverip, tmpport); break;
-#endif
-      case 'd': set_config_option( &g_serverdir, optarg ); break;
-      case 'u': set_config_option( &g_serveruser, optarg ); break;
-      case 'r': set_config_option( &g_redirecturl, optarg ); break;
-      case 'l': statefile = optarg; break;
-      case 'A':
-        if( !scan_ip6( optarg, tmpip )) { usage( argv[0] ); exit( 1 ); }
-        accesslist_blessip( tmpip, 0xffff ); /* Allow everything for now */
-        break;
-      case 'f': bound += parse_configfile( optarg ); break;
-      case 'h': help( argv[0] ); exit( 0 );
-      case 'v': {
-        char buffer[8192];
-        stats_return_tracker_version( buffer );
-        fputs( buffer, stderr );
-        exit( 0 );
-      }
-      default:
-      case '?': usage( argv[0] ); exit( 1 );
-    }
-  }
-
-  /* Bind to our default tcp/udp ports */
-  if( !bound) {
-    ot_try_bind( serverip, 6969, FLAG_TCP );
-    ot_try_bind( serverip, 6969, FLAG_UDP );
-  }
-
-#ifdef WANT_SYSLOGS
-  openlog( "opentracker", 0, LOG_USER );
-  setlogmask(LOG_UPTO(LOG_INFO));
-#endif
-
-  if( drop_privileges( g_serveruser ? g_serveruser : "nobody", g_serverdir ) == -1 )
-    panic( "drop_privileges failed, exiting. Last error");
-
-  g_now_seconds = time( NULL );
-
-  /* Create our self pipe which allows us to interrupt mainloops
-     io_wait in case some data is available to send out */
-  if( pipe( g_self_pipe ) == -1 )
-    panic( "selfpipe failed: " );
-  if( !io_fd( g_self_pipe[0] ) )
-    panic( "selfpipe io_fd failed: " );
-  io_setcookie( g_self_pipe[0], (void*)FLAG_SELFPIPE );
-  io_wantread( g_self_pipe[0] );
-
-  defaul_signal_handlers( );
-  /* Init all sub systems. This call may fail with an exit() */
-  trackerlogic_init( );
-
-  if( statefile )
-    load_state( statefile );
-
-  install_signal_handlers( );
-
-  /* Kick off our initial clock setting alarm */
-  alarm(5);
-
-  server_mainloop( 0 );
-
-  return 0;
+     #ifdef WANT_SYSLOGS
+     openlog( "opentracker", 0, LOG_USER );
+     setlogmask(LOG_UPTO(LOG_INFO));
+     #endif
+     
+     if( drop_privileges( g_serveruser ? g_serveruser : "nobody", g_serverdir ) == -1 )
+     panic( "drop_privileges failed, exiting. Last error");
+     
+     g_now_seconds = time( NULL );
+     
+     // Create our self pipe which allows us to interrupt mainloops
+     // io_wait in case some data is available to send out 
+     if( pipe( g_self_pipe ) == -1 )
+     panic( "selfpipe failed: " );
+     if( !io_fd( g_self_pipe[0] ) )
+     panic( "selfpipe io_fd failed: " );
+     io_setcookie( g_self_pipe[0], (void*)FLAG_SELFPIPE );
+     io_wantread( g_self_pipe[0] );
+     
+     defaul_signal_handlers( );
+     // Init all sub systems. This call may fail with an exit()
+     trackerlogic_init( );
+     
+     if( statefile )
+     load_state( statefile );
+     
+     install_signal_handlers( );
+     
+     // Kick off our initial clock setting alarm
+     alarm(5);
+     
+     server_mainloop( 0 );
+    
+    return 88;
 }
 
 const char *g_version_opentracker_c = "$Source: /home/cvsroot/opentracker/opentracker.c,v $: $Revision: 1.237 $\n";
