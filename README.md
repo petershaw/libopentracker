@@ -20,6 +20,7 @@ You have to start a thread in which you can call the tracker, otherwise it will 
 
 Steps to go:
 -------------------------------------------------
+```
 cvs -d :pserver:cvs@cvs.fefe.de:/cvs -z9 co libowfat
 cd libowfat
 make
@@ -28,6 +29,7 @@ cvs -d:pserver:anoncvs@cvs.erdgeist.org:/home/cvsroot co opentracker
 cd opentracker
 make
 ./opentracker
+```
 
 Build opentracker as a static library
 -------------------------------------------------
